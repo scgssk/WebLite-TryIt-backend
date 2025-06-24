@@ -4,6 +4,9 @@ import os
 import uuid
 from flask import send_from_directory
 import builder  # your existing builder.py
+from apscheduler.schedulers.background import BackgroundScheduler
+import time
+
 
 app = Flask(__name__)
 CORS(app, origins="*")
@@ -55,6 +58,23 @@ def build_site():
 @app.route('/output/<path:filename>')
 def serve_output(filename):
     return send_from_directory(OUTPUT_DIR, filename)
+
+def cleanup_old_files(folder, max_age_minutes=10):
+    now = time.time()
+    cutoff = now - (max_age_minutes * 60)
+
+    for filename in os.listdir(folder):
+        file_path = os.path.join(folder, filename)
+        if os.path.isfile(file_path):
+            if os.path.getmtime(file_path) < cutoff:
+                os.remove(file_path)
+                print(f"🧹 Deleted: {file_path}")
+
+
+scheduler = BackgroundScheduler()
+scheduler.add_job(lambda: cleanup_old_files(UPLOAD_DIR), 'interval', minutes=15)
+scheduler.add_job(lambda: cleanup_old_files(OUTPUT_DIR), 'interval', minutes=15)
+scheduler.start()
 
 if __name__ == "__main__":
     from waitress import serve
